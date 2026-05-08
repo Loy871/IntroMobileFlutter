@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1001050594600",
+    "project_id": "homeshare-4c93e",
+    "storage_bucket": "homeshare-4c93e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1001050594600:android:381bab671d6bc7eb70c41d",
+        "android_client_info": {
+          "package_name": "com.example.buurtleen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZC-ypmLrNWT59491xbXVq2DxruSlZBXw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
