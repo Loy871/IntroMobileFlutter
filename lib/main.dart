@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,23 +18,20 @@ void main() async {
 
 class BuurtLeenApp extends StatelessWidget {
   const BuurtLeenApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AuthService(),
       child: MaterialApp(
         title: 'BuurtLeen',
+        theme: AppTheme.theme,
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: const [Locale('nl')],
         locale: const Locale('nl'),
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-          useMaterial3: true,
-        ),
+        debugShowCheckedModeBanner: false,
         home: const AuthWrapper(),
       ),
     );
@@ -42,7 +40,6 @@ class BuurtLeenApp extends StatelessWidget {
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
-
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);

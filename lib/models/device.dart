@@ -10,6 +10,8 @@ class Device {
   final double lat;
   final double lng;
   final bool available;
+  final double avgRating;
+  final int reviewCount;
 
   Device({
     required this.id,
@@ -23,23 +25,25 @@ class Device {
     required this.lat,
     required this.lng,
     required this.available,
+    this.avgRating = 0,
+    this.reviewCount = 0,
   });
 
-  factory Device.fromMap(Map<String, dynamic> map, String id) {
-    return Device(
-      id: id,
-      title: map['title'] ?? '',
-      description: map['description'] ?? '',
-      category: map['category'] ?? '',
-      imageUrl: map['imageUrl'] ?? '',
-      pricePerDay: (map['pricePerDay'] ?? 0).toDouble(),
-      ownerId: map['ownerId'] ?? '',
-      city: map['city'] ?? '',
-      lat: (map['lat'] ?? 0).toDouble(),
-      lng: (map['lng'] ?? 0).toDouble(),
-      available: map['available'] ?? true,
-    );
-  }
+  factory Device.fromMap(Map<String, dynamic> map, String id) => Device(
+    id: id,
+    title: map['title'] ?? '',
+    description: map['description'] ?? '',
+    category: map['category'] ?? '',
+    imageUrl: map['imageUrl'] ?? '',
+    pricePerDay: (map['pricePerDay'] ?? 0).toDouble(),
+    ownerId: map['ownerId'] ?? '',
+    city: map['city'] ?? '',
+    lat: (map['lat'] ?? 0).toDouble(),
+    lng: (map['lng'] ?? 0).toDouble(),
+    available: map['available'] ?? true,
+    avgRating: (map['avgRating'] ?? 0).toDouble(),
+    reviewCount: (map['reviewCount'] ?? 0).toInt(),
+  );
 
   Map<String, dynamic> toMap() => {
     'title': title,
@@ -52,5 +56,7 @@ class Device {
     'lat': lat,
     'lng': lng,
     'available': available,
+    'avgRating': avgRating,
+    'reviewCount': reviewCount,
   };
 }

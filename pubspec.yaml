@@ -27,6 +27,10 @@ dependencies:
   intl: 0.20.2
   provider: ^6.1.0
   flutter_dotenv: ^6.0.1
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  flutter_map_cancellable_tile_provider: ^3.1.1
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
