@@ -5,8 +5,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:intl/intl.dart';
 import '../models/device.dart';
 import '../services/device_service.dart';
-import '../widgets/device_image.dart';
 import '../theme/app_theme.dart';
+import '../widgets/device_image.dart';
 import '../widgets/app_button.dart';
 import '../widgets/star_rating.dart';
 
@@ -27,6 +27,42 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isReserving = false;
+  List<DateTimeRange> _blockedPeriods = [];
+  bool _loadingPeriods = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBlockedPeriods();
+  }
+
+  Future<void> _loadBlockedPeriods() async {
+    final periods = await widget.service.getBlockedPeriods(widget.device.id);
+    setState(() {
+      _blockedPeriods = periods;
+      _loadingPeriods = false;
+    });
+  }
+
+  /// Geeft true als een dag geblokkeerd is
+  bool _isDayBlocked(DateTime day) {
+    for (final p in _blockedPeriods) {
+      if (!day.isBefore(p.start) && !day.isAfter(p.end)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Geeft true als een geselecteerde range een geblokkeerde dag bevat
+  bool _rangeHasBlockedDay(DateTime start, DateTime end) {
+    DateTime current = start;
+    while (!current.isAfter(end)) {
+      if (_isDayBlocked(current)) return true;
+      current = current.add(const Duration(days: 1));
+    }
+    return false;
+  }
 
   Future<void> _pickDateRange() async {
     final picked = await showDateRangePicker(
@@ -36,17 +72,32 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       initialDateRange: _startDate != null && _endDate != null
           ? DateTimeRange(start: _startDate!, end: _endDate!)
           : null,
+      // Nieuwe signature: 3 parameters
+      selectableDayPredicate: (day, start, end) => !_isDayBlocked(day),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFF2D6A4F),
+            primary: AppTheme.green,
             onPrimary: Colors.white,
+            surface: Colors.white,
           ),
+          // disabledDayStyle bestaat niet meer, verwijderd
         ),
         child: child!,
       ),
     );
+
     if (picked != null) {
+      if (_rangeHasBlockedDay(picked.start, picked.end)) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Periode bevat al gereserveerde dagen'),
+              backgroundColor: AppTheme.red,
+            ),
+          );
+        return;
+      }
       setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
@@ -78,16 +129,19 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Reservering bevestigd!'),
-            backgroundColor: Color(0xFF2D6A4F),
+            backgroundColor: AppTheme.green,
           ),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       setState(() => _isReserving = false);
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Fout: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppTheme.red,
+          ),
+        );
     }
   }
 
@@ -96,15 +150,19 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     final fmt = DateFormat('dd MMM yyyy', 'nl');
     final device = widget.device;
     final hasLocation = device.lat != 0 && device.lng != 0;
+    final days = _startDate != null && _endDate != null
+        ? _endDate!.difference(_startDate!).inDays + 1
+        : 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F5F0),
+      backgroundColor: AppTheme.bg,
       body: CustomScrollView(
         slivers: [
+          // Hero foto header
           SliverAppBar(
             expandedHeight: 280,
             pinned: true,
-            backgroundColor: const Color(0xFF2D6A4F),
+            backgroundColor: AppTheme.green,
             leading: GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(
@@ -115,7 +173,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                 ),
                 child: const Icon(
                   Icons.arrow_back_ios_new,
-                  color: Color(0xFF1A1A1A),
+                  color: AppTheme.textDark,
                   size: 18,
                 ),
               ),
@@ -128,13 +186,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               ),
             ),
           ),
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Titel + beschikbaarheid
+                  // Titel + status
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -144,7 +203,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF1A1A1A),
+                            color: AppTheme.textDark,
                           ),
                         ),
                       ),
@@ -155,17 +214,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: device.available
-                              ? const Color(0xFFE8F5E9)
-                              : const Color(0xFFFFEBEE),
+                              ? AppTheme.greenPale
+                              : AppTheme.redPale,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           device.available ? 'Beschikbaar' : 'Verhuurd',
                           style: TextStyle(
                             color: device.available
-                                ? const Color(0xFF2D6A4F)
-                                : Colors.red,
-                            fontWeight: FontWeight.w600,
+                                ? AppTheme.green
+                                : AppTheme.red,
+                            fontWeight: FontWeight.w700,
                             fontSize: 12,
                           ),
                         ),
@@ -173,6 +232,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
+
+                  // Rating
+                  if (device.avgRating > 0) ...[
+                    StarRating(
+                      rating: device.avgRating,
+                      count: device.reviewCount,
+                      size: 16,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
                   // Prijs + categorie
                   Row(
@@ -183,7 +252,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2D6A4F),
+                          color: AppTheme.green,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -206,7 +275,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                         ),
                         child: Text(
                           device.category,
-                          style: const TextStyle(color: Color(0xFF6B6560)),
+                          style: const TextStyle(color: AppTheme.textMid),
                         ),
                       ),
                     ],
@@ -220,16 +289,71 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: Color(0xFF1A1A1A),
+                        color: AppTheme.textDark,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       device.description,
                       style: const TextStyle(
-                        color: Color(0xFF6B6560),
+                        color: AppTheme.textMid,
                         height: 1.6,
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Geblokkeerde periodes tonen
+                  if (_blockedPeriods.isNotEmpty) ...[
+                    const Text(
+                      'Niet beschikbaar op:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _blockedPeriods.map((p) {
+                        final f = DateFormat('dd MMM', 'nl');
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.redPale,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppTheme.red.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.block,
+                                size: 12,
+                                color: AppTheme.red,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                p.start.isAtSameMomentAs(p.end)
+                                    ? f.format(p.start)
+                                    : '${f.format(p.start)} – ${f.format(p.end)}',
+                                style: const TextStyle(
+                                  color: AppTheme.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -241,7 +365,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: Color(0xFF1A1A1A),
+                        color: AppTheme.textDark,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -252,14 +376,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                           children: [
                             const Icon(
                               Icons.location_on,
-                              color: Color(0xFF2D6A4F),
+                              color: AppTheme.green,
                               size: 16,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               device.city,
                               style: const TextStyle(
-                                color: Color(0xFF6B6560),
+                                color: AppTheme.textMid,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -269,7 +393,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: SizedBox(
-                        height: 200,
+                        height: 180,
                         child: FlutterMap(
                           options: MapOptions(
                             initialCenter: LatLng(device.lat, device.lng),
@@ -289,7 +413,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                                   height: 40,
                                   child: const Icon(
                                     Icons.location_on,
-                                    color: Color(0xFF2D6A4F),
+                                    color: AppTheme.green,
                                     size: 40,
                                   ),
                                 ),
@@ -302,115 +426,163 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Periode kiezen
+                  // Datumkiezer
                   if (device.available) ...[
                     const Text(
                       'Periode kiezen',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: Color(0xFF1A1A1A),
+                        color: AppTheme.textDark,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: _pickDateRange,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _startDate != null
-                                ? const Color(0xFF2D6A4F)
-                                : const Color(0xFFE0DBD1),
-                          ),
-                        ),
-                        child: Row(
+
+                    // Laad indicator voor periodes
+                    if (_loadingPeriods)
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: AppTheme.cardDecoration(),
+                        child: const Row(
                           children: [
-                            const Icon(
-                              Icons.calendar_today,
-                              color: Color(0xFF2D6A4F),
-                              size: 20,
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.green,
+                              ),
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: 10),
                             Text(
-                              _startDate != null && _endDate != null
-                                  ? '${fmt.format(_startDate!)} → ${fmt.format(_endDate!)}'
-                                  : 'Tik om een periode te kiezen',
+                              'Beschikbaarheid laden...',
                               style: TextStyle(
-                                color: _startDate != null
-                                    ? const Color(0xFF1A1A1A)
-                                    : const Color(0xFFB0A99E),
-                                fontWeight: _startDate != null
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
+                                color: AppTheme.textLight,
+                                fontSize: 13,
                               ),
                             ),
                           ],
                         ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: _pickDateRange,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _startDate != null
+                                  ? AppTheme.green
+                                  : AppTheme.border,
+                              width: _startDate != null ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.greenPale,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.calendar_today,
+                                  color: AppTheme.green,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _startDate != null && _endDate != null
+                                          ? '${fmt.format(_startDate!)} → ${fmt.format(_endDate!)}'
+                                          : 'Tik om een periode te kiezen',
+                                      style: TextStyle(
+                                        color: _startDate != null
+                                            ? AppTheme.textDark
+                                            : AppTheme.textLight,
+                                        fontWeight: _startDate != null
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    if (_blockedPeriods.isNotEmpty)
+                                      const Text(
+                                        'Grijze dagen zijn al gereserveerd',
+                                        style: TextStyle(
+                                          color: AppTheme.textLight,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: AppTheme.textLight,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_startDate != null && _endDate != null) ...[
+                    const SizedBox(height: 10),
+
+                    // Totaalprijs
+                    if (_startDate != null && _endDate != null && days > 0)
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
+                          color: AppTheme.greenPale,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Totale prijs:',
-                              style: TextStyle(color: Color(0xFF6B6560)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Totale prijs',
+                                  style: TextStyle(
+                                    color: AppTheme.textMid,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  '$days dag${days > 1 ? 'en' : ''}',
+                                  style: const TextStyle(
+                                    color: AppTheme.textLight,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
                             Text(
-                              '€${(device.pricePerDay * (_endDate!.difference(_startDate!).inDays + 1)).toStringAsFixed(2)}',
+                              '€${(device.pricePerDay * days).toStringAsFixed(2)}',
                               style: const TextStyle(
-                                color: Color(0xFF2D6A4F),
+                                color: AppTheme.green,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 16,
+                                fontSize: 20,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                    ],
-                    GestureDetector(
-                      onTap: _isReserving ? null : _reserve,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _isReserving
-                              ? const Color(0xFF9E9890)
-                              : const Color(0xFF2D6A4F),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: _isReserving
-                            ? const Center(
-                                child: SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : const Text(
-                                'Reserveer nu',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                      ),
+                    const SizedBox(height: 14),
+
+                    AppButton(
+                      label: _startDate == null
+                          ? 'Kies eerst een periode'
+                          : 'Reserveer nu',
+                      loading: _isReserving,
+                      onTap: _startDate != null ? _reserve : null,
+                      icon: Icons.check_circle_outline_rounded,
                     ),
                   ] else
                     Container(
@@ -424,13 +596,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                         'Momenteel niet beschikbaar',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Color(0xFF9E9890),
+                          color: AppTheme.textLight,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
+
+                  // Beoordelingen
                   const Text(
                     'Beoordelingen',
                     style: TextStyle(
@@ -440,22 +614,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // Beoordeling schrijven
                   _ReviewForm(
                     deviceId: widget.device.id,
                     service: widget.service,
                   ),
                   const SizedBox(height: 16),
-
-                  // Bestaande beoordelingen
                   StreamBuilder<List<Map<String, dynamic>>>(
                     stream: widget.service.getReviews(widget.device.id),
                     builder: (context, snap) {
                       final reviews = snap.data ?? [];
                       if (reviews.isEmpty) {
                         return Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: AppTheme.cardDecoration(),
                           child: const Text(
@@ -483,11 +652,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 }
 
+// Review widgets
 class _ReviewForm extends StatefulWidget {
   final String deviceId;
   final DeviceService service;
   const _ReviewForm({required this.deviceId, required this.service});
-
   @override
   State<_ReviewForm> createState() => _ReviewFormState();
 }
@@ -517,14 +686,21 @@ class _ReviewFormState extends State<_ReviewForm> {
       );
       _comment.clear();
       setState(() => _rating = 0);
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Beoordeling geplaatst!'),
             backgroundColor: AppTheme.green,
           ),
         );
-      }
+    } on Exception catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppTheme.red,
+          ),
+        );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -581,13 +757,38 @@ class _ReviewCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                data['reviewerName'] ?? 'Gebruiker',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textDark,
-                  fontSize: 13,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppTheme.greenPale,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        (data['reviewerName'] as String? ?? '?')
+                            .substring(0, 1)
+                            .toUpperCase(),
+                        style: const TextStyle(
+                          color: AppTheme.green,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    data['reviewerName'] ?? 'Gebruiker',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textDark,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
               StarRating(rating: (data['rating'] as num).toDouble()),
             ],

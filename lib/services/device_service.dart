@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
@@ -43,7 +44,43 @@ class DeviceService {
   }
 
   Future<void> deleteDevice(String id) async {
+    // Verwijder ook alle reserveringen voor dit toestel
+    final reservations = await _db
+        .collection('reservations')
+        .where('deviceId', isEqualTo: id)
+        .get();
+    for (final doc in reservations.docs) {
+      await doc.reference.delete();
+    }
     await _db.collection('devices').doc(id).delete();
+  }
+
+  /// Haalt alle goedgekeurde/bevestigde reserveringen op voor een toestel
+  Future<List<DateTimeRange>> getBlockedPeriods(String deviceId) async {
+    final snap = await _db
+        .collection('reservations')
+        .where('deviceId', isEqualTo: deviceId)
+        .where('status', whereIn: ['bevestigd', 'goedgekeurd'])
+        .get();
+
+    return snap.docs.map((d) {
+      final data = d.data();
+      final start = (data['startDate'] as Timestamp).toDate();
+      final end = (data['endDate'] as Timestamp).toDate();
+      return DateTimeRange(start: start, end: end);
+    }).toList();
+  }
+
+  /// Controleert of een periode overlapt met bestaande reserveringen
+  bool _hasConflict(DateTimeRange requested, List<DateTimeRange> blocked) {
+    for (final b in blocked) {
+      // Overlap als: start voor einde geblokkeerde periode EN einde na start
+      final overlaps =
+          requested.start.isBefore(b.end.add(const Duration(days: 1))) &&
+          requested.end.isAfter(b.start.subtract(const Duration(days: 1)));
+      if (overlaps) return true;
+    }
+    return false;
   }
 
   Future<void> makeReservation({
@@ -54,6 +91,14 @@ class DeviceService {
     required DateTime start,
     required DateTime end,
   }) async {
+    // Conflict check VOOR opslaan
+    final blocked = await getBlockedPeriods(deviceId);
+    final requested = DateTimeRange(start: start, end: end);
+
+    if (_hasConflict(requested, blocked)) {
+      throw Exception('Deze periode is al gereserveerd. Kies andere datums.');
+    }
+
     await _db.collection('reservations').add({
       'deviceId': deviceId,
       'deviceTitle': deviceTitle,
@@ -74,6 +119,12 @@ class DeviceService {
         .map((s) => s.docs.map((d) => {...d.data(), 'id': d.id}).toList());
   }
 
+  Future<void> cancelReservation(String reservationId) async {
+    await _db.collection('reservations').doc(reservationId).update({
+      'status': 'geannuleerd',
+    });
+  }
+
   Future<void> submitReview({
     required String deviceId,
     required String reviewerId,
@@ -81,6 +132,16 @@ class DeviceService {
     required double rating,
     required String comment,
   }) async {
+    // Check of gebruiker al een review heeft geplaatst
+    final existing = await _db
+        .collection('reviews')
+        .where('deviceId', isEqualTo: deviceId)
+        .where('reviewerId', isEqualTo: reviewerId)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      throw Exception('Je hebt dit toestel al beoordeeld.');
+    }
+
     await _db.collection('reviews').add({
       'deviceId': deviceId,
       'reviewerId': reviewerId,
@@ -89,7 +150,7 @@ class DeviceService {
       'comment': comment,
       'createdAt': Timestamp.now(),
     });
-    // Update gemiddelde rating op device
+
     final reviews = await _db
         .collection('reviews')
         .where('deviceId', isEqualTo: deviceId)

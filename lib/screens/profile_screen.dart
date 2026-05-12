@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_button.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -19,12 +18,12 @@ class ProfileScreen extends StatelessWidget {
       backgroundColor: AppTheme.bg,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
+          const SliverAppBar(
             backgroundColor: AppTheme.bg,
             floating: true,
             elevation: 0,
             titleSpacing: 20,
-            title: const Text(
+            title: Text(
               'Mijn profiel',
               style: TextStyle(
                 color: AppTheme.textDark,
@@ -40,8 +39,8 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   // Avatar
                   Container(
-                    width: 90,
-                    height: 90,
+                    width: 88,
+                    height: 88,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [AppTheme.greenLight, AppTheme.green],
@@ -60,13 +59,13 @@ class ProfileScreen extends StatelessWidget {
                         initial,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 36,
+                          fontSize: 34,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Text(
                     email,
                     style: const TextStyle(
@@ -74,75 +73,84 @@ class ProfileScreen extends StatelessWidget {
                       fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 32),
-
-                  // Stats row
+                  const SizedBox(height: 8),
+                  // Lid sinds badge
                   Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: AppTheme.cardDecoration(),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _statItem('Lid sinds', _memberSince(user)),
-                        _divider(),
-                        _statItem('Account', 'Actief'),
-                        _divider(),
-                        _statItem('Verificatie', 'E-mail'),
-                      ],
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.greenPale,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Lid sinds ${_memberSince(user)}',
+                      style: const TextStyle(
+                        color: AppTheme.green,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 28),
 
-                  // Menu items
+                  // Menu
                   Container(
                     decoration: AppTheme.cardDecoration(),
                     child: Column(
                       children: [
                         _menuItem(
-                          Icons.notifications_outlined,
-                          'Meldingen',
-                          'Beheer je notificaties',
-                          () {},
+                          icon: Icons.shield_outlined,
+                          title: 'Privacy & voorwaarden',
+                          sub: 'Bekijk ons beleid',
+                          onTap: () => _infoDialog(
+                            context,
+                            'Privacy',
+                            'BuurtLeen slaat alleen noodzakelijke gegevens op. Jouw data wordt nooit verkocht aan derden.',
+                          ),
                         ),
-                        _dividerH(),
-                        _menuItem(
-                          Icons.shield_outlined,
-                          'Privacy',
-                          'Bekijk ons privacybeleid',
-                          () {},
+                        const Divider(
+                          height: 1,
+                          color: AppTheme.border,
+                          indent: 56,
                         ),
-                        _dividerH(),
                         _menuItem(
-                          Icons.help_outline_rounded,
-                          'Help & support',
-                          'Vragen of problemen?',
-                          () {},
-                        ),
-                        _dividerH(),
-                        _menuItem(
-                          Icons.info_outline_rounded,
-                          'Over BuurtLeen',
-                          'Versie 1.0.0',
-                          () {},
+                          icon: Icons.info_outline_rounded,
+                          title: 'Over BuurtLeen',
+                          sub: 'Versie 1.0.0',
+                          onTap: () => _infoDialog(
+                            context,
+                            'Over BuurtLeen',
+                            'BuurtLeen is een app om huishoudelijke toestellen te delen en te verhuren in je buurt. Geïnspireerd door Peerby.',
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  AppButton(
-                    label: 'Uitloggen',
-                    outlined: true,
-                    icon: Icons.logout_rounded,
-                    onTap: () => auth.logout(),
-                  ),
-                  const SizedBox(height: 12),
-                  AppButton(
-                    label: 'Account verwijderen',
-                    danger: true,
-                    outlined: true,
-                    icon: Icons.delete_outline_rounded,
-                    onTap: () => _confirmDelete(context, auth),
+                  // Knoppen — compact, naast elkaar
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Uitloggen',
+                          icon: Icons.logout_rounded,
+                          color: AppTheme.green,
+                          onTap: () => auth.logout(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Verwijderen',
+                          icon: Icons.delete_outline_rounded,
+                          color: AppTheme.red,
+                          onTap: () => _confirmDelete(context),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 40),
                 ],
@@ -160,35 +168,12 @@ class ProfileScreen extends StatelessWidget {
     return '${d.day}/${d.month}/${d.year}';
   }
 
-  Widget _statItem(String label, String value) => Column(
-    children: [
-      Text(
-        value,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: AppTheme.textDark,
-          fontSize: 14,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        label,
-        style: const TextStyle(color: AppTheme.textLight, fontSize: 11),
-      ),
-    ],
-  );
-
-  Widget _divider() => Container(width: 1, height: 32, color: AppTheme.border);
-
-  Widget _dividerH() =>
-      const Divider(height: 1, color: AppTheme.border, indent: 56);
-
-  Widget _menuItem(
-    IconData icon,
-    String title,
-    String sub,
-    VoidCallback onTap,
-  ) => ListTile(
+  Widget _menuItem({
+    required IconData icon,
+    required String title,
+    required String sub,
+    required VoidCallback onTap,
+  }) => ListTile(
     onTap: onTap,
     leading: Container(
       padding: const EdgeInsets.all(8),
@@ -217,13 +202,70 @@ class ProfileScreen extends StatelessWidget {
     ),
   );
 
-  void _confirmDelete(BuildContext context, AuthService auth) {
+  Widget _actionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  void _infoDialog(BuildContext context, String title, String content) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Account verwijderen?'),
-        content: const Text('Dit kan niet ongedaan worden gemaakt.'),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(content, style: const TextStyle(color: AppTheme.textMid)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Sluiten',
+              style: TextStyle(color: AppTheme.green),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Account verwijderen?',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'Dit verwijdert je account permanent. Dit kan niet ongedaan worden gemaakt.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

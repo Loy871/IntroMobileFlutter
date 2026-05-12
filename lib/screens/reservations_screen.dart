@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/device_service.dart';
+import '../theme/app_theme.dart';
 
 class ReservationsScreen extends StatelessWidget {
   const ReservationsScreen({super.key});
@@ -13,18 +14,18 @@ class ReservationsScreen extends StatelessWidget {
     if (user == null) return const Center(child: Text('Niet ingelogd'));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F5F0),
+      backgroundColor: AppTheme.bg,
       body: CustomScrollView(
         slivers: [
           const SliverAppBar(
-            backgroundColor: Color(0xFFF7F5F0),
+            backgroundColor: AppTheme.bg,
             floating: true,
             elevation: 0,
             titleSpacing: 20,
             title: Text(
-              'Mijn reserveringen',
+              'Mijn huurders',
               style: TextStyle(
-                color: Color(0xFF1A1A1A),
+                color: AppTheme.textDark,
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
               ),
@@ -36,45 +37,36 @@ class ReservationsScreen extends StatelessWidget {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const SliverFillRemaining(
                   child: Center(
-                    child: CircularProgressIndicator(color: Color(0xFF2D6A4F)),
+                    child: CircularProgressIndicator(color: AppTheme.green),
                   ),
                 );
               }
-              if (snap.hasError) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: Colors.orange,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Index aanmaken in Firebase:',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${snap.error}',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-              final reservations = snap.data ?? [];
-              if (reservations.isEmpty) {
+              final all = snap.data ?? [];
+
+              // Splits in actief en verleden
+              final now = DateTime.now();
+              final active = all.where((r) {
+                try {
+                  final end = (r['endDate'] as Timestamp).toDate();
+                  return end.isAfter(now) &&
+                      r['status'] != 'geannuleerd' &&
+                      r['status'] != 'geweigerd';
+                } catch (_) {
+                  return false;
+                }
+              }).toList();
+              final past = all.where((r) {
+                try {
+                  final end = (r['endDate'] as Timestamp).toDate();
+                  return end.isBefore(now) ||
+                      r['status'] == 'geannuleerd' ||
+                      r['status'] == 'geweigerd';
+                } catch (_) {
+                  return false;
+                }
+              }).toList();
+
+              if (all.isEmpty) {
                 return const SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -83,34 +75,51 @@ class ReservationsScreen extends StatelessWidget {
                         Icon(
                           Icons.calendar_today,
                           size: 64,
-                          color: Color(0xFFB0A99E),
+                          color: AppTheme.textLight,
                         ),
                         SizedBox(height: 16),
                         Text(
                           'Nog geen reserveringen',
                           style: TextStyle(
-                            color: Color(0xFF6B6560),
-                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textMid,
+                            fontWeight: FontWeight.w700,
                             fontSize: 16,
                           ),
                         ),
                         SizedBox(height: 8),
                         Text(
                           'Reserveer een toestel via Ontdekken',
-                          style: TextStyle(color: Color(0xFF9E9890)),
+                          style: TextStyle(
+                            color: AppTheme.textLight,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 );
               }
+
               return SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => _ReservationCard(data: reservations[i]),
-                    childCount: reservations.length,
-                  ),
+                  delegate: SliverChildListDelegate([
+                    if (active.isNotEmpty) ...[
+                      _sectionHeader(
+                        'Actieve reserveringen',
+                        Icons.check_circle_outline,
+                      ),
+                      ...active.map(
+                        (r) => _ReservationCard(data: r, canCancel: true),
+                      ),
+                    ],
+                    if (past.isNotEmpty) ...[
+                      _sectionHeader('Vorige reserveringen', Icons.history),
+                      ...past.map(
+                        (r) => _ReservationCard(data: r, canCancel: false),
+                      ),
+                    ],
+                  ]),
                 ),
               );
             },
@@ -119,90 +128,194 @@ class ReservationsScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _sectionHeader(String title, IconData icon) => Padding(
+    padding: const EdgeInsets.only(bottom: 10, top: 4),
+    child: Row(
+      children: [
+        Icon(icon, size: 15, color: AppTheme.green),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppTheme.textMid,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ReservationCard extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _ReservationCard({required this.data});
+  final bool canCancel;
+  const _ReservationCard({required this.data, required this.canCancel});
 
   @override
   Widget build(BuildContext context) {
-    // Veilige datum parsing zonder locale crash
+    final fmt = DateFormat('dd MMM yyyy', 'nl');
     String dateText = '';
+    int days = 0;
     try {
-      final fmt = DateFormat('dd MMM yyyy', 'nl_BE');
       final start = (data['startDate'] as Timestamp).toDate();
       final end = (data['endDate'] as Timestamp).toDate();
       dateText = '${fmt.format(start)} → ${fmt.format(end)}';
-    } catch (_) {
-      dateText = 'Datum onbekend';
+      days = end.difference(start).inDays + 1;
+    } catch (_) {}
+
+    final status = data['status'] ?? 'bevestigd';
+    Color statusColor;
+    Color statusBg;
+    IconData statusIcon;
+    switch (status) {
+      case 'goedgekeurd':
+        statusColor = AppTheme.green;
+        statusBg = AppTheme.greenPale;
+        statusIcon = Icons.check_circle;
+        break;
+      case 'geannuleerd':
+        statusColor = AppTheme.textLight;
+        statusBg = const Color(0xFFF5F5F5);
+        statusIcon = Icons.cancel;
+        break;
+      case 'geweigerd':
+        statusColor = AppTheme.red;
+        statusBg = AppTheme.redPale;
+        statusIcon = Icons.block;
+        break;
+      default:
+        statusColor = const Color(0xFFE67F00);
+        statusBg = const Color(0xFFFFF3E0);
+        statusIcon = Icons.hourglass_empty;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: AppTheme.cardDecoration(),
+      child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.devices,
-              color: Color(0xFF2D6A4F),
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
               children: [
-                Text(
-                  data['deviceTitle'] ?? 'Toestel',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 15,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        data['deviceTitle'] ?? 'Toestel',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textDark,
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (dateText.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          dateText,
+                          style: const TextStyle(
+                            color: AppTheme.textMid,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (days > 0)
+                          Text(
+                            '$days dag${days > 1 ? 'en' : ''}',
+                            style: const TextStyle(
+                              color: AppTheme.textLight,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  dateText,
-                  style: const TextStyle(
-                    color: Color(0xFF6B6560),
-                    fontSize: 13,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              data['status'] ?? 'bevestigd',
-              style: const TextStyle(
-                color: Color(0xFF2D6A4F),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+          // Annuleer knop
+          if (canCancel && status != 'geannuleerd') ...[
+            Container(height: 1, color: AppTheme.border),
+            TextButton.icon(
+              onPressed: () => _confirmCancel(context),
+              icon: const Icon(
+                Icons.cancel_outlined,
+                size: 15,
+                color: AppTheme.red,
               ),
+              label: const Text(
+                'Annuleer reservering',
+                style: TextStyle(
+                  color: AppTheme.red,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _confirmCancel(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Reservering annuleren?',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'Weet je zeker dat je deze reservering wil annuleren?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Terug',
+              style: TextStyle(color: AppTheme.textMid),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              await DeviceService().cancelReservation(data['id']);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text(
+              'Annuleren',
+              style: TextStyle(color: AppTheme.red),
             ),
           ),
         ],
