@@ -1,3 +1,4 @@
+import 'package:buurtleen/screens/dev_tools_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
@@ -123,6 +124,22 @@ class ProfileScreen extends StatelessWidget {
                             context,
                             'Over BuurtLeen',
                             'BuurtLeen is een app om huishoudelijke toestellen te delen en te verhuren in je buurt. Geïnspireerd door Peerby.',
+                          ),
+                        ),
+                        const Divider(
+                          height: 1,
+                          color: AppTheme.border,
+                          indent: 56,
+                        ),
+                        _menuItem(
+                          icon: Icons.developer_mode_rounded,
+                          title: 'Developer tools',
+                          sub: 'Datum simuleren & reserveringen bekijken',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const DevToolsScreen(),
+                            ),
                           ),
                         ),
                       ],
