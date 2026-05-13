@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/device_service.dart';
@@ -25,6 +26,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _search = '';
   final _searchCtrl = TextEditingController();
 
+  double? _filterLat;
+  double? _filterLng;
+  double _radiusKm = 10; // default 10km
+
   final List<Map<String, dynamic>> _categories = [
     {'label': 'Alles', 'icon': Icons.apps_rounded},
     {'label': 'Tuin', 'icon': Icons.grass_rounded},
@@ -34,6 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
     {'label': 'Overig', 'icon': Icons.category_rounded},
   ];
 
+
+  Future<void> _setMyLocation() async {
+    final position = await Geolocator.getCurrentPosition();
+
+    setState(() {
+      _filterLat = position.latitude;
+      _filterLng = position.longitude;
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : null,
     );
   }
+
 
   Widget _buildBrowse() {
     return CustomScrollView(
@@ -283,7 +298,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             }
-            final devices = snap.data ?? [];
+            final devices = List<Device>.from(snap.data ?? []);
+
+            devices.sort((a, b) {
+              final aTime = a.createdAt;
+              final bTime = b.createdAt;
+
+              if (aTime == null && bTime == null) return 0;
+              if (aTime == null) return 1;
+              if (bTime == null) return -1;
+
+              return bTime.compareTo(aTime);
+            });
             if (devices.isEmpty) {
               return SliverFillRemaining(
                 child: Center(
@@ -346,6 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
 
 class _DeviceCard extends StatelessWidget {
   final Device device;

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Device {
   final String id;
   final String title;
@@ -12,6 +14,7 @@ class Device {
   final bool available;
   final double avgRating;
   final int reviewCount;
+  final DateTime? createdAt;
 
   Device({
     required this.id,
@@ -26,7 +29,8 @@ class Device {
     required this.lng,
     required this.available,
     this.avgRating = 0,
-    this.reviewCount = 0,
+    this.reviewCount = 0, 
+    this.createdAt,
   });
 
   factory Device.fromMap(Map<String, dynamic> map, String id) => Device(
@@ -43,6 +47,9 @@ class Device {
     available: map['available'] ?? true,
     avgRating: (map['avgRating'] ?? 0).toDouble(),
     reviewCount: (map['reviewCount'] ?? 0).toInt(),
+    createdAt: map['createdAt'] != null
+    ? (map['createdAt'] as Timestamp).toDate()
+    : null,
   );
 
   Map<String, dynamic> toMap() => {
@@ -58,5 +65,6 @@ class Device {
     'available': available,
     'avgRating': avgRating,
     'reviewCount': reviewCount,
+    'createdAt': FieldValue.serverTimestamp(),
   };
 }

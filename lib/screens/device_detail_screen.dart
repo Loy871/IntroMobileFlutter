@@ -659,135 +659,86 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   const SizedBox(height: 28),
 
                   // Beoordelingen
-                  const Text(
-                    'Beoordelingen',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _ReviewForm(
-                    deviceId: widget.device.id,
-                    service: widget.service,
-                  ),
-                  const SizedBox(height: 16),
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: widget.service.getReviews(widget.device.id),
-                    builder: (context, snap) {
-                      final reviews = snap.data ?? [];
-                      if (reviews.isEmpty) {
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: AppTheme.cardDecoration(),
-                          child: const Text(
-                            'Nog geen beoordelingen',
-                            style: TextStyle(color: AppTheme.textLight),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      }
-                      return Column(
-                        children: reviews
-                            .map((r) => _ReviewCard(data: r))
-                            .toList(),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 30),
+                  // Beoordelingen
+const Text(
+  'Beoordelingen',
+  style: TextStyle(
+    fontWeight: FontWeight.w700,
+    fontSize: 15,
+    color: AppTheme.textDark,
+  ),
+),
+const SizedBox(height: 10),
+
+// Gemiddelde rating kaart
+if (device.avgRating > 0)
+  Container(
+    padding: const EdgeInsets.all(16),
+    decoration: AppTheme.cardDecoration(),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.star,
+          color: Colors.amber,
+          size: 28,
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              device.avgRating.toStringAsFixed(1),
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textDark,
+              ),
+            ),
+            Text(
+              '${device.reviewCount} beoordeling${device.reviewCount == 1 ? '' : 'en'}',
+              style: const TextStyle(
+                color: AppTheme.textMid,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+
+const SizedBox(height: 16),
+
+// Reviews lijst
+StreamBuilder<List<Map<String, dynamic>>>(
+  stream: widget.service.getReviews(widget.device.id),
+  builder: (context, snap) {
+    final reviews = snap.data ?? [];
+
+    if (reviews.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: AppTheme.cardDecoration(),
+        child: const Text(
+          'Nog geen beoordelingen',
+          style: TextStyle(color: AppTheme.textLight),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Column(
+      children: reviews
+          .map((r) => _ReviewCard(data: r))
+          .toList(),
+    );
+  },
+),
+
+const SizedBox(height: 30),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Review widgets
-class _ReviewForm extends StatefulWidget {
-  final String deviceId;
-  final DeviceService service;
-  const _ReviewForm({required this.deviceId, required this.service});
-  @override
-  State<_ReviewForm> createState() => _ReviewFormState();
-}
-
-class _ReviewFormState extends State<_ReviewForm> {
-  final _comment = TextEditingController();
-  double _rating = 0;
-  bool _loading = false;
-
-  Future<void> _submit() async {
-    if (_rating == 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Geef een score')));
-      return;
-    }
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    setState(() => _loading = true);
-    try {
-      await widget.service.submitReview(
-        deviceId: widget.deviceId,
-        reviewerId: user.uid,
-        reviewerName: user.email?.split('@').first ?? 'Gebruiker',
-        rating: _rating,
-        comment: _comment.text.trim(),
-      );
-      _comment.clear();
-      setState(() => _rating = 0);
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Beoordeling geplaatst!'),
-            backgroundColor: AppTheme.green,
-          ),
-        );
-    } on Exception catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppTheme.red,
-          ),
-        );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: AppTheme.cardDecoration(),
-      child: Column(
-        children: [
-          const Text(
-            'Schrijf een beoordeling',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textDark,
-            ),
-          ),
-          const SizedBox(height: 12),
-          InteractiveStarRating(onChanged: (r) => setState(() => _rating = r)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _comment,
-            maxLines: 2,
-            style: const TextStyle(color: AppTheme.textDark),
-            decoration: AppTheme.inputDecoration('Vertel over je ervaring...'),
-          ),
-          const SizedBox(height: 12),
-          AppButton(
-            label: 'Beoordeling plaatsen',
-            loading: _loading,
-            onTap: _submit,
           ),
         ],
       ),

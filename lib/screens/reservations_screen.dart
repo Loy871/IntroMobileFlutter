@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/device_service.dart';
 import '../theme/app_theme.dart';
+import 'review_device_screen.dart';
 
 class ReservationsScreen extends StatelessWidget {
   const ReservationsScreen({super.key});
@@ -283,6 +284,33 @@ class _ReservationCard extends StatelessWidget {
               ),
             ),
           ],
+          if (status == 'goedgekeurd' &&
+    data['endDate'] != null &&
+    (data['endDate'] as Timestamp).toDate().isBefore(DateTime.now())) ...[
+  const SizedBox(height: 8),
+  TextButton.icon(
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReviewDeviceScreen(
+            deviceId: data['deviceId'],
+            deviceTitle: data['deviceTitle'] ?? '',
+          ),
+        ),
+      );
+    },
+    icon: const Icon(Icons.star_rate, size: 16, color: AppTheme.green),
+    label: const Text(
+      'Beoordeel',
+      style: TextStyle(
+        color: AppTheme.green,
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+      ),
+    ),
+  ),
+],
         ],
       ),
     );

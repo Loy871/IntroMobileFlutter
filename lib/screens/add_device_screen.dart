@@ -97,10 +97,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       if (user == null) throw Exception('Niet ingelogd');
 
       // Stad extraheren uit adres
-      final city = _address
-          .split(',')
-          .firstWhere((p) => p.trim().isNotEmpty, orElse: () => _address)
-          .trim();
+      final parts = _address.split(',');
+
+      final city = parts.last.trim();
 
       await _service.addDevice(
         Device(
@@ -116,6 +115,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
           lat: _lat!,
           lng: _lng!,
           available: _available,
+          createdAt: DateTime.now(),
         ),
       );
 
