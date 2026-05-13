@@ -310,9 +310,14 @@ class _ReservationCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              await DeviceService().cancelReservation(data['id']);
-              if (context.mounted) Navigator.pop(context);
-            },
+  final navigator = Navigator.of(context);
+
+  await DeviceService().cancelReservation(data['id']);
+
+  if (!context.mounted) return;
+
+  navigator.pop();
+},
             child: const Text(
               'Annuleren',
               style: TextStyle(color: AppTheme.red),

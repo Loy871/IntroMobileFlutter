@@ -1,7 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../models/device.dart';
 import '../services/device_service.dart';
@@ -24,6 +26,8 @@ class DeviceDetailScreen extends StatefulWidget {
 }
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
+  String _fullAddress = '';
+  bool _loadingAddress = false;
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isReserving = false;
@@ -34,6 +38,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   void initState() {
     super.initState();
     _loadBlockedPeriods();
+    _loadAddress();
   }
 
   Future<void> _loadBlockedPeriods() async {
@@ -89,13 +94,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
     if (picked != null) {
       if (_rangeHasBlockedDay(picked.start, picked.end)) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Periode bevat al gereserveerde dagen'),
               backgroundColor: AppTheme.red,
             ),
           );
+        }
         return;
       }
       setState(() {
@@ -104,6 +110,53 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       });
     }
   }
+/// adres weergeven
+  Future<void> _loadAddress() async {
+  if (widget.device.lat == 0 || widget.device.lng == 0) return;
+
+  setState(() => _loadingAddress = true);
+
+  try {
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/reverse'
+      '?lat=${widget.device.lat}'
+      '&lon=${widget.device.lng}'
+      '&format=json'
+      '&accept-language=nl',
+    );
+
+    final resp = await http.get(
+  uri,
+  headers: {
+    'User-Agent': 'buurtleen-app',
+  },
+);
+
+    if (resp.statusCode == 200) {
+      final data = json.decode(resp.body);
+
+      setState(() {
+        final addr = data['address'] ?? {};
+
+        _fullAddress =
+            addr['city'] ??
+            addr['town'] ??
+            addr['village'] ??
+            addr['municipality'] ??
+            addr['county'] ??
+            '';
+      });
+    }
+  } catch (e) {
+    setState(() {
+      _fullAddress =
+          '${widget.device.lat}, ${widget.device.lng}';
+    });
+  }
+
+  setState(() => _loadingAddress = false);
+}
+
 
   Future<void> _reserve() async {
     final auth = FirebaseAuth.instance.currentUser;
@@ -135,13 +188,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       }
     } on Exception catch (e) {
       setState(() => _isReserving = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll('Exception: ', '')),
             backgroundColor: AppTheme.red,
           ),
         );
+      }
     }
   }
 
@@ -369,7 +423,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (device.city.isNotEmpty)
+                    
+                      /////
+                      if (_loadingAddress)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Adres laden...',
+                          style: TextStyle(color: AppTheme.textLight),
+                        ),
+                      )
+                    else if (_fullAddress.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
@@ -381,7 +445,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              device.city,
+                              _fullAddress,
                               style: const TextStyle(
                                 color: AppTheme.textMid,
                                 fontWeight: FontWeight.w500,
@@ -394,33 +458,23 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                       borderRadius: BorderRadius.circular(16),
                       child: SizedBox(
                         height: 180,
-                        child: FlutterMap(
-                          options: MapOptions(
-                            initialCenter: LatLng(device.lat, device.lng),
-                            initialZoom: 13,
+                        child: SizedBox(
+                        height: 180,
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(device.lat, device.lng),
+                            zoom: 13,
                           ),
-                          children: [
-                            TileLayer(
-                              urlTemplate:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.buurtleen.app',
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('device'),
+                              position: LatLng(device.lat, device.lng),
                             ),
-                            MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: LatLng(device.lat, device.lng),
-                                  width: 40,
-                                  height: 40,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    color: AppTheme.green,
-                                    size: 40,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                          },
+                          zoomControlsEnabled: false,
+                          mapToolbarEnabled: false,
                         ),
+                      ),
                       ),
                     ),
                     const SizedBox(height: 20),
